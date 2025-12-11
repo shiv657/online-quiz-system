@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Online Quiz System</title>
+<style>
+:root{
+  --bg:#0f172a;--muted:rgba(255,255,255,0.7);--card:rgba(255,255,255,0.05);
+  --glass:rgba(255,255,255,0.03);--brand1:#7C3AED;--brand2:#06B6D4;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial;
+  background:
+    radial-gradient(900px 560px at 10% 10%, rgba(124,58,237,0.12), transparent),
+    radial-gradient(760px 460px at 90% 90%, rgba(6,182,212,0.08), transparent),
+    var(--bg);
+  color:#E6EEF8;display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.app{width:100%;max-width:1150px;display:grid;grid-template-columns:320px 1fr;min-height:680px;
+  border-radius:14px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));
+  box-shadow:0 10px 40px rgba(2,6,23,0.7);}
+.sidebar{padding:22px;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:18px}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:48px;height:48px;border-radius:12px;background:linear-gradient(90deg,var(--brand2),var(--brand1));
+  display:grid;place-items:center;font-weight:800;color:#001}
+.nav{display:flex;flex-direction:column;gap:8px}
+.nav button{border:none;border-radius:10px;background:transparent;color:inherit;text-align:left;padding:10px 12px;cursor:pointer;font-weight:700}
+.nav button.active{background:rgba(255,255,255,0.08)}
+.logout{margin-top:auto;display:flex;justify-content:space-between;align-items:center}
+.btn-ghost{border:1px solid rgba(255,255,255,0.08);background:transparent;color:var(--muted);padding:8px 12px;border-radius:10px;cursor:pointer}
+.main{padding:28px;display:flex;flex-direction:column;gap:16px}
+h1{font-size:22px}
+.subtitle{color:var(--muted);font-size:14px}
+.card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.45)}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.stats .stat{background:var(--glass);border-radius:10px;padding:10px 12px;min-width:120px}
+.quizzes-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.quiz-card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:14px;border-radius:12px;display:flex;gap:8px;flex-direction:column}
+.badge{display:inline-block;font-size:12px;color:#001;background:linear-gradient(90deg,var(--brand2),var(--brand1));padding:2px 8px;border-radius:999px;font-weight:800}
+.badge.lock{background:rgba(255,255,255,0.14);color:#fff;border:1px solid rgba(255,255,255,0.12)}
+.price{font-size:13px;color:#b7fff1}
+.primary{border:none;border-radius:10px;background:linear-gradient(90deg,var(--brand2),var(--brand1));color:#001;font-weight:800;cursor:pointer;padding:10px 12px}
+.option{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);cursor:pointer}
+.option.selected{background:rgba(255,255,255,0.06);border-color:rgba(124,58,237,0.5)}
+.option.correct{background:rgba(6,182,212,0.14);border-color:rgba(6,182,212,0.5)}
+.option.wrong{background:rgba(220,38,38,0.14);border-color:rgba(220,38,38,0.5)}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:10px 6px;border-bottom:1px dashed rgba(255,255,255,0.08);font-size:13px;text-align:left}
+.kit{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.kit .chip{background:rgba(255,255,255,0.08);padding:6px 10px;border-radius:999px;font-size:12px}
+.paywall{position:fixed;inset:0;background:rgba(2,6,23,0.7);display:none;align-items:center;justify-content:center;padding:18px;z-index:50}
+.modal{max-width:520px;width:100%;background:linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02));border-radius:14px;padding:18px}
+.input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:#fff;outline:none}
+.inline{display:flex;gap:8px;align-items:center}
+.note{color:var(--muted);font-size:12px}
+@media(max-width:900px){.app{grid-template-columns:1fr;min-height:100vh}.sidebar{order:2}.main{order:1}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Paywall Modal -->
+<div id="paywall" class="paywall" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-weight:800" id="pw-title">Unlock Module</div>
+      <button class="btn-ghost" id="pw-close">Close</button>
+    </div>
+    <div id="pw-body">
+      <!-- dynamic -->
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------------- DATA ---------------------- */
+// Premium modules require purchase; Fun Zone is free.
+// Each quiz holds 10–15 questions.
+const QUIZZES = [
+  {
+    id:'upsc', title:'UPSC Preparation', category:'Exam Prep', price:49, premium:true,
+    description:'GS, Polity, History — 15 curated MCQs with timer.',
+    timeLimitSec:900,
+    questions:[
+      {text:'Which Article guarantees the Right to Equality?',options:['Article 14','Article 15','Article 21','Article 19'],answerIndex:0},
+      {text:'Finance Commission is constituted under?',options:['Art. 280','Art. 324','Art. 148','Art. 123'],answerIndex:0},
+      {text:'Father of Indian Constitution?',options:['B. R. Ambedkar','Rajendra Prasad','Sardar Patel','Jawaharlal Nehru'],answerIndex:0},
+      {text:'First President of India?',options:['Rajendra Prasad','Zakir Husain','S. Radhakrishnan','Neelam Sanjiva Reddy'],answerIndex:0},
+      {text:'Planning Commission replaced by NITI Aayog in?',options:['2014','2015','2016','2019'],answerIndex:1},
+      {text:'Seventh Schedule relates to?',options:['Union/State powers','Languages','Panchayats','Anti-defection'],answerIndex:0},
+      {text:'Chief Election Commissioner is appointed by?',options:['President','Prime Minister','Lok Sabha','Supreme Court'],answerIndex:0},
+      {text:'Article for Right to Life?',options:['14','19','21','32'],answerIndex:2},
+      {text:'Viceroy during 1857 Revolt?',options:['Lord Canning','Lord Curzon','Lord Ripon','Lord Mountbatten'],answerIndex:0},
+      {text:'Who wrote “Discovery of India”?',options:['Gandhi','Tilak','Nehru','Bose'],answerIndex:2},
+      {text:'Current President of India?',options:['Droupadi Murmu','Ram Nath Kovind','Pranab Mukherjee','Pratibha Patil'],answerIndex:0},
+      {text:'DPSPs provide?',options:['Justiciable rights','Non-justiciable goals','Emergency powers','Taxation rules'],answerIndex:1},
+      {text:'Max age of SC judge retirement?',options:['60','62','65','68'],answerIndex:2},
+      {text:'Article 370 originally related to?',options:['J&K','NEFA','Goa','Hyderabad'],answerIndex:0},
+      {text:'Fundamental Duty example?',options:['Protect environment','Equal pay','Uniform civil code','Right to remedy'],answerIndex:0},
+    ]
+  },
+  {
+    id:'reasoning', title:'Reasoning Quiz', category:'Exam Prep', price:29, premium:true,
+    description:'Series, coding-decoding, order, and analogies — 12 Q.',
+    timeLimitSec:720,
+    questions:[
+      {text:'Next: 2, 6, 12, 20, 30, ?',options:['40','42','44','38'],answerIndex:1},
+      {text:'If CAT=3120 then DOG=?',options:['4157','4156','4192','4729'],answerIndex:1},
+      {text:'Odd one: Apple, Banana, Mango, Carrot',options:['Apple','Banana','Mango','Carrot'],answerIndex:3},
+      {text:'3, 9, 27, 81, ?',options:['162','243','324','225'],answerIndex:1},
+      {text:'A=1..Z=26, value of CAT?',options:['27','29','32','24'],answerIndex:1},
+      {text:'Taller: Raju>Suresh; Sonu<Suresh. Tallest?',options:['Raju','Suresh','Sonu','Cannot determine'],answerIndex:0},
+      {text:'“TIGER”->“VJKGT”; “ZEBRA”->?',options:['BGDTC','ADCSB','BGDQA','AFETD'],answerIndex:0},
+      {text:'Odd one: Square, Triangle, Circle, Cube',options:['Square','Triangle','Circle','Cube'],answerIndex:3},
+      {text:'If 3x-5=16, x=?',options:['5','6','7','8'],answerIndex:2},
+      {text:'Months initial series: J,F,M,A,M,?',options:['J','A','S','N'],answerIndex:0},
+      {text:'Clock: angle between 3:15 hour&minute?',options:['7.5°','0°','15°','30°'],answerIndex:0},
+      {text:'Mirror image of 2:30 shows?',options:['9:30','9:00','10:30','10:00'],answerIndex:3},
+    ]
+  },
+  {
+    id:'hindi_gk', title:'Hindi GK', category:'Exam Prep', price:19, premium:true,
+    description:'Hindi me GK prashn — 10 Q.',
+    timeLimitSec:600,
+    questions:[
+      {text:'भारत की राजधानी क्या है?',options:['मुंबई','नई दिल्ली','कोलकाता','चेन्नई'],answerIndex:1},
+      {text:'ताजमहल कहाँ है?',options:['आगरा','जयपुर','दिल्ली','लखनऊ'],answerIndex:0},
+      {text:'सबसे प्राचीन ग्रंथ?',options:['रामायण','महाभारत','वेद','पुराण'],answerIndex:2},
+      {text:'राष्ट्रीय पशु?',options:['शेर','बाघ','चीताह','हिरण'],answerIndex:1},
+      {text:'“शोले” के निर्देशक?',options:['ऋषिकेश मुखर्जी','रमेश सिप्पी','यश चोपड़ा','प्रकाश मेहरा'],answerIndex:1},
+      {text:'राष्ट्रीय खेल (परंपरागत धारणा)?',options:['क्रिकेट','हॉकी','कबड्डी','फुटबॉल'],answerIndex:1},
+      {text:'गांधी जी का पूरा नाम?',options:['मोहनदास करमचंद गांधी','मदन मोहन गांधी','मुरलीधर गांधी','मोहनलाल गांधी'],answerIndex:0},
+      {text:'1857 की लड़ाई कब हुई?',options:['1857','1947','1930','1920'],answerIndex:0},
+      {text:'संविधान सभा का गठन?',options:['कांग्रेस','ब्रिटिश सरकार','नेहरू','आंबेडकर'],answerIndex:1},
+      {text:'भारत में राज्यों की संख्या?',options:['28','29','27','30'],answerIndex:0},
+    ]
+  },
+  {
+    id:'english', title:'English Language', category:'Exam Prep', price:15, premium:true,
+    description:'Grammar, vocab, usage — 10 Q.',
+    timeLimitSec:600,
+    questions:[
+      {text:'Plural of “Analysis”?',options:['Analyses','Analysis','Analysises','Analysise'],answerIndex:0},
+      {text:'Synonym of “Brave”?',options:['Coward','Heroic','Timid','Afraid'],answerIndex:1},
+      {text:'Correct sentence:',options:['He go school','He goes to school','He gone to school','He going to school'],answerIndex:1},
+      {text:'Antonym of “Transparent”?',options:['Opaque','Clear','Plain','Sheer'],answerIndex:0},
+      {text:'She ____ football every Sunday.',options:['plays','play','playing','played'],answerIndex:0},
+      {text:'Past tense of “swim”?',options:['swum','swam','swimmed','swim'],answerIndex:1},
+      {text:'Preposition: Arrived ___ time.',options:['at','in','on','by'],answerIndex:0},
+      {text:'Meaning of “ambiguous”?',options:['Unclear','Clear','Certain','Known'],answerIndex:0},
+      {text:'Choose correct article: ___ hour.',options:['A','An','The','No article'],answerIndex:1},
+      {text:'Reported speech of: He said, “I am fine”.',options:['He said that he was fine.','He said he is fine.','He says he was fine.','He told he is fine.'],answerIndex:0},
+    ]
+  },
+  {
+    id:'maths', title:'Mathematics', category:'Exam Prep', price:25, premium:true,
+    description:'Arithmetic & aptitude — 10 Q.',
+    timeLimitSec:720,
+    questions:[
+      {text:'15×12 = ?',options:['170','180','190','200'],answerIndex:1},
+      {text:'√196 = ?',options:['12','13','14','15'],answerIndex:2},
+      {text:'2x+3=13, x=?',options:['3','4','5','6'],answerIndex:2},
+      {text:'25% of 200 = ?',options:['40','45','50','55'],answerIndex:2},
+      {text:'(8² - 6²) = ?',options:['14','28','52','100'],answerIndex:1},
+      {text:'5! = ?',options:['100','115','120','125'],answerIndex:2},
+      {text:'Sum of triangle angles?',options:['90°','180°','270°','360°'],answerIndex:1},
+      {text:'7×7 - 5×3 = ?',options:['34','32','28','24'],answerIndex:0},
+      {text:'Next prime after 11?',options:['12','13','15','16'],answerIndex:1},
+      {text:'Square 6 cm: area?',options:['30','36','42','24'],answerIndex:1},
+    ]
+  },
+  {
+    id:'fun', title:'Fun Zone – Filmi • Sports • Paheli', category:'Free', price:0, premium:false,
+    description:'Chill quizzes: Bollywood, sports, riddles, basic GK — 10 Q.',
+    timeLimitSec:600,
+    questions:[
+      {text:'“Bhaijaan” of Bollywood?',options:['Salman Khan','Shah Rukh Khan','Aamir Khan','Akshay Kumar'],answerIndex:0},
+      {text:'Cricket team players count?',options:['9','10','11','12'],answerIndex:2},
+      {text:'Riddle: Keys but no locks?',options:['Piano','Keyboard','Map','Code'],answerIndex:0},
+      {text:'FIFA 2022 winner?',options:['Brazil','Argentina','France','Germany'],answerIndex:1},
+      {text:'Krishna in Mahabharat (1988)?',options:['Nitish Bharadwaj','Mukesh Khanna','Puneet Issar','Gajendra Chauhan'],answerIndex:0},
+      {text:'City of Dreams (India)?',options:['Mumbai','Delhi','Chennai','Kolkata'],answerIndex:0},
+      {text:'Song “Chaiyya Chaiyya” movie?',options:['Dil Se','Lagaan','Dhoom','Swades'],answerIndex:0},
+      {text:'“God of Cricket”?',options:['Sachin Tendulkar','Virat Kohli','MS Dhoni','Ricky Ponting'],answerIndex:0},
+      {text:'Japan currency?',options:['Yen','Won','Ruble','Ringgit'],answerIndex:0},
+      {text:'Riddle: I speak without a mouth?',options:['Echo','Shadow','Wind','Steam'],answerIndex:0},
+    ]
+  }
+];
+
+/* ---------------------- STORAGE KEYS ---------------------- */
+const LS = {
+  SESSION:'quiz_session_user',
+  HISTORY:'quiz_history',
+  PURCHASES:'quiz_purchases',
+  RECEIPTS:'quiz_receipts'
+};
+
+/* ---------------------- HELPERS ---------------------- */
+const $ = (s,doc=document)=>doc.querySelector(s);
+const $$ = (s,doc=document)=>Array.from(doc.querySelectorAll(s));
+function escapeHtml(s=''){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function loadJson(k,def){try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(def));}catch{return def}}
+function saveJson(k,v){localStorage.setItem(k,JSON.stringify(v))}
+function getPurchases(){return loadJson(LS.PURCHASES,{})}
+function isPurchased(quizId){const p=getPurchases();return !!p[quizId]}
+function markPurchased(quizId,order){const p=getPurchases();p[quizId]=true;saveJson(LS.PURCHASES,p);const r=loadJson(LS.RECEIPTS,[]);r.push(order);saveJson(LS.RECEIPTS,r)}
+function fmtRs(n){return '₹'+n}
+function nowStr(){return new Date().toLocaleString()}
+function uid(){return 'ORD-'+Math.random().toString(36).slice(2,8).toUpperCase()}
+
+/* ---------------------- LOGIN ---------------------- */
+const root = document.getElementById('root');
+function renderLogin(){
+  root.innerHTML = `
+  <div class="card" style="max-width:420px;margin:auto">
+    <div class="brand"><div class="logo">QZ</div><div><div style="font-weight:800">Online Quiz System</div><div class="subtitle">Practice • Prepare • Play</div></div></div>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+      <label class="subtitle">Username</label>
+      <input id="u" class="input" placeholder="your name">
+      <label class="subtitle">Password</label>
+      <input id="p" class="input" type="password" placeholder="••••">
+      <div class="row">
+        <button class="primary" id="btn-login">Login</button>
+        <button class="btn-ghost" id="btn-guest">Continue as Guest</button>
+      </div>
+      <div class="note">Tip: Local account only; data stored in this browser.</div>
+    </div>
+  </div>`;
+  $('#btn-login').onclick=()=>{
+    const u=$('#u').value.trim(), pw=$('#p').value.trim();
+    if(!u||!pw){alert('Enter username & password');return;}
+    localStorage.setItem(LS.SESSION,u);
+    renderApp();
+  };
+  $('#btn-guest').onclick=()=>{
+    localStorage.setItem(LS.SESSION,'guest_'+Math.floor(Math.random()*10000));
+    renderApp();
+  };
+}
+
+/* ---------------------- APP SHELL ---------------------- */
+function renderApp(){
+  const user = localStorage.getItem(LS.SESSION);
+  if(!user){renderLogin();return;}
+  root.innerHTML = `
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">QZ</div>
+        <div><h2>Quiz System</h2><div class="subtitle">Study & Fun</div></div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:800">${escapeHtml(user)}</div>
+            <div class="subtitle">Logged in</div>
+          </div>
+          <div style="font-weight:800">${escapeHtml(user).slice(0,2).toUpperCase()}</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="active" data-view="dashboard">Dashboard</button>
+        <button data-view="history">My Scores</button>
+        <button data-view="about">About</button>
+      </nav>
+      <div class="logout">
+        <div class="subtitle">Local session</div>
+        <button class="btn-ghost" id="logout">Logout</button>
+      </div>
+    </aside>
+    <main class="main">
+      <div>
+        <h1 id="title">Dashboard</h1>
+        <div class="subtitle" id="subtitle">Choose a quiz — premium modules require unlock.</div>
+      </div>
+      <div id="content"></div>
+    </main>
+  </div>`;
+  $('#logout').onclick=()=>{localStorage.removeItem(LS.SESSION);renderLogin();};
+  $$('.nav button').forEach(b=>{
+    b.onclick=()=>{
+      $$('.nav button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      const v=b.getAttribute('data-view');
+      if(v==='dashboard') renderDashboard();
+      else if(v==='history') renderHistory();
+      else if(v==='about') renderAbout();
+    }
+  });
+  renderDashboard();
+}
+
+/* ---------------------- DASHBOARD ---------------------- */
+function renderDashboard(){
+  $('#title').textContent='Dashboard';
+  $('#subtitle').textContent='Exam Prep and Fun Zone — unlock premium modules once and use forever on this device.';
+  const user = localStorage.getItem(LS.SESSION)||'guest';
+  const history = loadJson(LS.HISTORY,[]).filter(x=>x.username===user);
+  const best = history.length? Math.max(...history.map(h=>Math.round(h.scorePercent)))+'%' : '--';
+  $('#content').innerHTML = `
+    <div class="row stats">
+      <div class="stat"><div class="subtitle">Quizzes</div><div style="font-weight:800">${QUIZZES.length}</div></div>
+      <div class="stat"><div class="subtitle">Attempts</div><div style="font-weight:800">${history.length}</div></div>
+      <div class="stat"><div class="subtitle">Best</div><div style="font-weight:800">${best}</div></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3>Available Quizzes</h3>
+        <div class="kit">
+          <div class="chip">Exam Prep</div>
+          <div class="chip">Fun Zone</div>
+          <div class="chip">Reasoning</div>
+          <div class="chip">GK</div>
+          <div class="chip">Maths</div>
+        </div>
+      </div>
+      <div class="quizzes-grid" id="qgrid" style="margin-top:10px"></div>
+    </div>
+  `;
+  const grid = $('#qgrid');
+  QUIZZES.forEach(q=>{
+    const locked = q.premium && !isPurchased(q.id);
+    const div = document.createElement('div');
+    div.className='quiz-card';
+    div.innerHTML = `
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h3>${escapeHtml(q.title)}</h3>
+        <span class="badge ${locked?'lock':''}">${locked?'Locked':'Ready'}</span>
+      </div>
+      <div class="subtitle">${escapeHtml(q.description)}</div>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="subtitle">${q.timeLimitSec/60|0} min • ${q.questions.length} Q ${q.premium?`• <span class="price">${fmtRs(q.price)}</span>`:''}</div>
+        <div class="row">
+          ${locked? `<button class="btn-ghost" data-buy="${q.id}">Unlock</button>`:''}
+          <button class="primary" data-start="${q.id}" ${locked?'disabled':''}>Start</button>
+        </div>
+      </div>
+    `;
+    grid.appendChild(div);
+  });
+  $$('[data-start]').forEach(b=>b.onclick=()=>startQuiz(b.getAttribute('data-start')));
+  $$('[data-buy]').forEach(b=>b.onclick=()=>openPaywall(b.getAttribute('data-buy')));
+}
+
+/* ---------------------- PAYWALL / PURCHASE ---------------------- */
+function openPaywall(quizId){
+  const q = QUIZZES.find(x=>x.id===quizId);
+  const pw = $('#paywall');
+  $('#pw-title').textContent = `Unlock: ${q.title}`;
+  const couponHint = 'Use code PREP10 for 10% off';
+  $('#pw-body').innerHTML = `
+    <div class="card" style="background:rgba(255,255,255,0.03)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:800">${escapeHtml(q.title)}</div>
+          <div class="subtitle">${escapeHtml(q.description)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="subtitle">One-time unlock</div>
+          <div style="font-weight:900">${fmtRs(q.price)}</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="chip">Device-only access</div>
+        <div class="chip">No recurring fee</div>
+        <div class="chip">Instant unlock</div>
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <label class="subtitle">Coupon</label>
+      <div class="inline">
+        <input id="coupon" class="input" placeholder="${couponHint}">
+        <button class="btn-ghost" id="apply">Apply</button>
+      </div>
+      <div class="note">Supported coupons: PREP10 (10% off)</div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <div style="font-weight:800;margin-bottom:6px">Order Summary</div>
+      <table class="table">
+        <tr><th>Item</th><td>${escapeHtml(q.title)}</td></tr>
+        <tr><th>Price</th><td id="price">${fmtRs(q.price)}</td></tr>
+        <tr><th>Discount</th><td id="discount">₹0</td></tr>
+        <tr><th>Total</th><td id="total">${fmtRs(q.price)}</td></tr>
+      </table>
+      <div class="row" style="margin-top:10px;justify-content:flex-end">
+        <button class="btn-ghost" id="cancel">Cancel</button>
+        <button class="primary" id="pay">Pay & Unlock</button>
+      </div>
+      <div class="note" style="margin-top:6px">Mock payment for demo; no real transaction. Receipt saved locally.</div>
+    </div>
+  `;
+  let discount = 0;
+  function refreshTotals(){
+    const total = Math.max(q.price - discount, 0);
+    $('#discount').textContent = fmtRs(discount);
+    $('#total').textContent = fmtRs(total);
+  }
+  $('#apply').onclick=()=>{
+    const code = ($('#coupon').value||'').trim().toUpperCase();
+    if(code==='PREP10'){ discount = Math.round(q.price*0.10); refreshTotals(); alert('Coupon applied!'); }
+    else { discount = 0; refreshTotals(); alert('Invalid coupon'); }
+  };
+  $('#cancel').onclick=()=>closePaywall();
+  $('#pay').onclick=()=>{
+    const total = Math.max(q.price - discount,0);
+    const order = { id: uid(), quizId:q.id, item:q.title, price:q.price, discount, total, when: nowStr() };
+    markPurchased(q.id, order);
+    alert(`Unlocked! Order ${order.id} • Paid ${fmtRs(order.total)}`);
+    closePaywall();
+    renderDashboard();
+  };
+  $('#pw-close').onclick=()=>closePaywall();
+  pw.style.display='flex';
+  pw.setAttribute('aria-hidden','false');
+  refreshTotals();
+}
+function closePaywall(){
+  const pw = $('#paywall');
+  pw.style.display='none';
+  pw.setAttribute('aria-hidden','true');
+}
+
+/* ---------------------- QUIZ ENGINE ---------------------- */
+let STATE=null, TICK=null;
+function startQuiz(id){
+  const quiz = QUIZZES.find(q=>q.id===id);
+  if(quiz.premium && !isPurchased(quiz.id)){
+    openPaywall(quiz.id); return;
+  }
+  STATE = {
+    quizId: quiz.id, title: quiz.title, q: quiz.questions,
+    idx: 0, ans: Array(quiz.questions.length).fill(null),
+    time: quiz.timeLimitSec, started: Date.now()
+  };
+  renderQuiz();
+  startTimer();
+}
+function startTimer(){
+  clearInterval(TICK);
+  TICK = setInterval(()=>{
+    if(!STATE) return clearInterval(TICK);
+    STATE.time--;
+    const t = $('#timer'); if(t) t.textContent = formatClock(STATE.time);
+    if(STATE.time<=0){ clearInterval(TICK); submitQuiz(true); }
+  },1000);
+}
+function formatClock(sec){ if(sec<0)sec=0;const m=(sec/60|0).toString().padStart(2,'0');const s=(sec%60).toString().padStart(2,'0');return `${m}:${s}`;}
+function renderQuiz(){
+  const q = STATE.q[STATE.idx];
+  $('#content').innerHTML = `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="subtitle">Quiz</div>
+          <div style="font-weight:800">${escapeHtml(STATE.title)}</div>
+          <div class="subtitle" style="margin-top:4px">${STATE.q.length} questions</div>
+        </div>
+        <div style="text-align:right">
+          <div class="subtitle">Time left</div>
+          <div id="timer" style="font-weight:900">${formatClock(STATE.time)}</div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="question">Q${STATE.idx+1}. ${escapeHtml(q.text)}</div>
+        <div class="options" id="opts" style="margin-top:10px"></div>
+      </div>
+      <div class="row" style="justify-content:space-between;align-items:center;margin-top:8px">
+        <div>
+          <button class="btn-ghost" id="prev" ${STATE.idx===0?'disabled':''}>Previous</button>
+          <button class="btn-ghost" id="next" ${STATE.idx===STATE.q.length-1?'disabled':''}>Next</button>
+        </div>
+        <div class="row">
+          <div class="subtitle">Q ${STATE.idx+1} / ${STATE.q.length}</div>
+          <button class="primary" id="submit">Submit</button>
+        </div>
+      </div>
+      <div class="note" style="margin-top:8px">Selections are saved while quiz is active.</div>
+    </div>
+  `;
+  const opts = $('#opts');
+  q.options.forEach((opt,i)=>{
+    const el=document.createElement('div');
+    el.className='option'+(STATE.ans[STATE.idx]===i?' selected':'');
+    el.textContent=opt;
+    el.onclick=()=>{STATE.ans[STATE.idx]=i;renderQuiz();};
+    opts.appendChild(el);
+  });
+  $('#prev').onclick=()=>{STATE.idx--;renderQuiz();};
+  $('#next').onclick=()=>{STATE.idx++;renderQuiz();};
+  $('#submit').onclick=()=>{ if(confirm('Submit quiz?')) submitQuiz(false); };
+}
+function submitQuiz(auto){
+  clearInterval(TICK);
+  const quiz = QUIZZES.find(q=>q.id===STATE.quizId);
+  let correct=0;
+  STATE.q.forEach((qq,i)=>{ if(qq.answerIndex===STATE.ans[i]) correct++; });
+  const total=STATE.q.length;
+  const score=(correct/total)*100;
+  const spent=(quiz.timeLimitSec-STATE.time);
+  const rec = {
+    username: localStorage.getItem(LS.SESSION)||'guest',
+    quizId: quiz.id, quizTitle: quiz.title,
+    scorePercent: score, correctCount: correct, total,
+    detail: STATE.ans, timestamp: Date.now(), spentSec: spent, autoSubmit: !!auto
+  };
+  const hist = loadJson(LS.HISTORY,[]); hist.push(rec); saveJson(LS.HISTORY,hist);
+  renderResult(rec);
+}
+function renderResult(h){
+  $('#title').textContent='Result';
+  $('#subtitle').textContent=`You completed: ${h.quizTitle}`;
+  $('#content').innerHTML = `
+    <div class="row">
+      <div class="card" style="flex:1">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="subtitle">Score</div>
+            <div style="font-size:34px;font-weight:900">${Math.round(h.scorePercent)}%</div>
+            <div class="subtitle">Correct ${h.correctCount}/${h.total}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="subtitle">Time</div>
+            <div style="font-weight:800">${h.spentSec}s</div>
+            <div class="subtitle" style="margin-top:8px">Saved to history</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="primary" id="back">Back to Dashboard</button>
+        </div>
+      </div>
+      <div class="card" style="width:360px">
+        <div style="font-weight:800">Attempt summary</div>
+        <table class="table" style="margin-top:8px">
+          <tr><th>Quiz</th><td>${escapeHtml(h.quizTitle)}</td></tr>
+          <tr><th>Score</th><td>${Math.round(h.scorePercent)}%</td></tr>
+          <tr><th>Correct</th><td>${h.correctCount}/${h.total}</td></tr>
+          <tr><th>Time</th><td>${h.spentSec}s</td></tr>
+          <tr><th>When</th><td>${new Date(h.timestamp).toLocaleString()}</td></tr>
+        </table>
+      </div>
+    </div>
+  `;
+  $('#back').onclick=()=>renderDashboard();
+}
+
+/* ---------------------- HISTORY ---------------------- */
+function renderHistory(){
+  $('#title').textContent='My Scores';
+  $('#subtitle').textContent='All attempts saved locally on this device.';
+  const user = localStorage.getItem(LS.SESSION)||'guest';
+  const list = loadJson(LS.HISTORY,[]).filter(x=>x.username===user).sort((a,b)=>b.timestamp-a.timestamp);
+  if(!list.length){ $('#content').innerHTML = `<div class="card">No attempts yet. Try a quiz from Dashboard.</div>`; return; }
+  let rows = '';
+  list.forEach(it=>{
+    rows+=`<tr><td>${escapeHtml(it.quizTitle)}</td><td>${Math.round(it.scorePercent)}%</td><td>${it.correctCount}/${it.total}</td><td>${it.spentSec}s</td><td>${new Date(it.timestamp).toLocaleString()}</td></tr>`;
+  });
+  $('#content').innerHTML = `
+    <div class="card">
+      <h3>Attempt History</h3>
+      <table class="table" style="margin-top:8px">
+        <thead><tr><th>Quiz</th><th>Score</th><th>Correct</th><th>Time</th><th>When</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h3>Receipts</h3>
+      ${renderReceipts()}
+    </div>
+  `;
+}
+function renderReceipts(){
+  const r = loadJson(LS.RECEIPTS,[]);
+  if(!r.length) return `<div class="subtitle">No purchases yet.</div>`;
+  let t = `<table class="table"><thead><tr><th>Order</th><th>Item</th><th>Price</th><th>Discount</th><th>Total</th><th>When</th></tr></thead><tbody>`;
+  r.forEach(o=>{
+    t+=`<tr><td>${o.id}</td><td>${escapeHtml(o.item)}</td><td>${fmtRs(o.price)}</td><td>${fmtRs(o.discount)}</td><td>${fmtRs(o.total)}</td><td>${o.when}</td></tr>`;
+  });
+  t+=`</tbody></table>`;
+  return t;
+}
+
+/* ---------------------- ABOUT ---------------------- */
+function renderAbout(){
+  $('#title').textContent='About';
+  $('#subtitle').textContent='Learn smarter. Practice faster.';
+  $('#content').innerHTML = `
+    <div class="card">
+      <h3>About This Platform</h3>
+      <p class="subtitle" style="margin-top:6px">Prepare for competitive exams with curated quizzes in UPSC, Reasoning, GK, English, and Maths, plus a Fun Zone to unwind. Your progress and purchases are stored locally on this device.</p>
+      <div class="row" style="margin-top:10px">
+        <div class="chip">Timers & navigation</div>
+        <div class="chip">Local scores</div>
+        <div class="chip">One-time unlock</div>
+        <div class="chip">Offline friendly</div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div style="font-weight:800">Pricing Overview</div>
+        <table class="table" style="margin-top:8px">
+          <tr><th>UPSC</th><td>₹49</td><th>Reasoning</th><td>₹29</td></tr>
+          <tr><th>Hindi GK</th><td>₹19</td><th>English</th><td>₹15</td></tr>
+          <tr><th>Mathematics</th><td>₹25</td><th>Fun Zone</th><td>Free</td></tr>
+        </table>
+        <div class="note" style="margin-top:6px">Coupon: PREP10 for 10% off (applies per module).</div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------------- BOOT ---------------------- */
+(function init(){
+  const s = localStorage.getItem(LS.SESSION);
+  if(s) renderApp(); else renderLogin();
+})();
+</script>
+</body>
+</html>
